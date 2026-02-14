@@ -1,87 +1,97 @@
 import { create } from 'zustand';
-import type {
-  BlockColor,
-  GridSize,
-  Piece,
-  LevelData,
-} from '@blockjam/shared';
+import type { BlockColor, GridSize, LevelData } from '@blockjam/shared';
+import { BLOCK_COLORS } from '@blockjam/shared';
 import {
   createEmptyGrid,
-  generatePieces,
   canPlacePiece,
-  placePieceOnGrid,
-  findAndClearLines,
-  checkGameOver,
+  placePiece as placeOnGrid,
+  findCompletedLines,
+  clearLines,
+  canAnyPieceFit,
+  countClearedCells,
 } from '@/engine/GridLogic';
-import {
-  calculatePlacementScore,
-  checkLevelComplete,
-} from '@/engine/GameEngine';
+import { getRandomPieces } from '@/engine/BlockTypes';
+import type { PieceDefinition } from '@/engine/BlockTypes';
+import { calculateScore, calculateCombo } from '@/engine/ScoreCalculator';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
+export interface StorePiece {
+  id: string;
+  shape: boolean[][];
+  color: BlockColor;
+  isPlaced: boolean;
+}
+
 interface GameStoreState {
-  /** The current grid of placed blocks (null = empty cell). */
   grid: (BlockColor | null)[][];
-  /** Current grid dimensions. */
   gridSize: GridSize;
-  /** The pieces available for the player to place this turn. */
-  currentPieces: Piece[];
-  /** Index of the piece the player has tapped / selected, or null. */
+  currentPieces: StorePiece[];
   selectedPieceIndex: number | null;
-  /** Accumulated score for this play session. */
   score: number;
-  /** Current consecutive-line-clear combo counter. */
   combo: number;
-  /** Remaining moves (null = unlimited / endless mode). */
   movesLeft: number | null;
-  /** Lines the player must clear to beat the level (null = endless). */
   targetLines: number | null;
-  /** Total lines cleared so far. */
   linesCleared: number;
-  /** Whether the game has ended (no valid placements remaining). */
   isGameOver: boolean;
-  /** Whether the level-complete condition has been met. */
   isLevelComplete: boolean;
 }
 
 interface GameStoreActions {
-  /**
-   * Initialise (or re-initialise) the game.
-   * @param gridSize - Board dimensions.
-   * @param levelData - Optional level data for community / campaign levels.
-   */
   initGame: (gridSize: GridSize, levelData?: LevelData) => void;
-
-  /**
-   * Attempt to place the piece at `pieceIndex` starting at the given row/col.
-   * Handles line-clearing, scoring, combo tracking, game-over and
-   * level-complete checks, and piece refills.
-   */
   placePiece: (pieceIndex: number, row: number, col: number) => void;
-
-  /** Mark a piece as the currently-selected piece. */
   selectPiece: (index: number | null) => void;
-
-  /** Reset the store back to a blank slate. */
   resetGame: () => void;
-
-  /**
-   * Continue playing after a game-over (e.g. after watching a rewarded ad).
-   * Generates a fresh set of pieces and un-flags the game-over state.
-   */
   continueAfterGameOver: () => void;
 }
 
 type GameStore = GameStoreState & GameStoreActions;
 
 // ---------------------------------------------------------------------------
-// Defaults
+// Helpers
 // ---------------------------------------------------------------------------
 
 const DEFAULT_GRID_SIZE: GridSize = 8;
+
+function toStorePieces(
+  enginePieces: Array<{ definition: PieceDefinition; color: BlockColor }>,
+): StorePiece[] {
+  return enginePieces.map((p, i) => ({
+    id: `${p.definition.id}-${Date.now()}-${i}`,
+    shape: p.definition.shape,
+    color: p.color,
+    isPlaced: false,
+  }));
+}
+
+function makeNewPieces(): StorePiece[] {
+  return toStorePieces(getRandomPieces(3));
+}
+
+function buildGridFromLevelData(
+  levelData: LevelData,
+  gridSize: GridSize,
+): (BlockColor | null)[][] {
+  const grid = createEmptyGrid(gridSize);
+  for (const cell of levelData.grid.cells) {
+    if (cell.r >= 0 && cell.r < gridSize && cell.c >= 0 && cell.c < gridSize) {
+      const color: BlockColor | undefined = BLOCK_COLORS[cell.color];
+      if (color !== undefined) {
+        const row = grid[cell.r];
+        if (row) {
+          row[cell.c] = color;
+        }
+      }
+    }
+  }
+  return grid;
+}
+
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
 
 const initialState: GameStoreState = {
   grid: createEmptyGrid(DEFAULT_GRID_SIZE),
@@ -104,14 +114,12 @@ const initialState: GameStoreState = {
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialState,
 
-  // -- Actions ---------------------------------------------------------------
-
   initGame: (gridSize: GridSize, levelData?: LevelData) => {
     const grid = levelData
       ? buildGridFromLevelData(levelData, gridSize)
       : createEmptyGrid(gridSize);
 
-    const pieces = generatePieces(gridSize);
+    const pieces = makeNewPieces();
 
     set({
       grid,
@@ -134,19 +142,42 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const piece = state.currentPieces[pieceIndex];
     if (!piece || piece.isPlaced) return;
 
-    if (!canPlacePiece(state.grid, piece, row, col)) return;
+    // 1. Validate placement using the piece's shape (boolean[][])
+    if (!canPlacePiece(state.grid, piece.shape, row, col)) return;
 
-    // 1. Place piece on grid
-    const gridAfterPlace = placePieceOnGrid(state.grid, piece, row, col);
+    // 2. Place piece on grid
+    const gridAfterPlace = placeOnGrid(
+      state.grid,
+      piece.shape,
+      row,
+      col,
+      piece.color,
+    );
 
-    // 2. Clear completed lines
-    const { grid: gridAfterClear, linesCleared: newLines } =
-      findAndClearLines(gridAfterPlace, state.gridSize);
+    // 3. Find and clear completed lines
+    const completed = findCompletedLines(gridAfterPlace);
+    const totalLinesNow = completed.rows.length + completed.cols.length;
+    const comboLevel = calculateCombo(totalLinesNow);
 
-    // 3. Calculate score
-    const combo = newLines > 0 ? state.combo + 1 : 0;
-    const pointsEarned = calculatePlacementScore(piece, newLines, combo);
-    const totalLinesCleared = state.linesCleared + newLines;
+    let gridAfterClear = gridAfterPlace;
+    let pointsEarned = 0;
+
+    if (totalLinesNow > 0) {
+      const cellsCleared = countClearedCells(
+        gridAfterPlace,
+        completed.rows,
+        completed.cols,
+      );
+      pointsEarned = calculateScore(cellsCleared, comboLevel);
+      gridAfterClear = clearLines(
+        gridAfterPlace,
+        completed.rows,
+        completed.cols,
+      );
+    }
+
+    const combo = totalLinesNow > 0 ? state.combo + 1 : 0;
+    const totalLinesCleared = state.linesCleared + totalLinesNow;
 
     // 4. Mark piece as placed
     const updatedPieces = state.currentPieces.map((p, i) =>
@@ -161,18 +192,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // 6. Refill pieces if all have been placed
     const allPlaced = updatedPieces.every((p) => p.isPlaced);
-    const nextPieces = allPlaced
-      ? generatePieces(state.gridSize)
-      : updatedPieces;
+    const nextPieces = allPlaced ? makeNewPieces() : updatedPieces;
 
-    // 7. Check win / lose conditions
-    const isLevelComplete = checkLevelComplete(
-      totalLinesCleared,
-      state.targetLines,
-    );
+    // 7. Check level complete
+    const isLevelComplete =
+      state.targetLines !== null && totalLinesCleared >= state.targetLines;
+
+    // 8. Check game over: no pieces fit OR ran out of moves
+    const unplaced = nextPieces.filter((p) => !p.isPlaced);
+    const noFit =
+      unplaced.length > 0 &&
+      !canAnyPieceFit(
+        gridAfterClear,
+        unplaced.map((p) => ({ shape: p.shape })),
+      );
     const isGameOver =
-      !isLevelComplete &&
-      (movesLeft === 0 || checkGameOver(gridAfterClear, nextPieces));
+      !isLevelComplete && (movesLeft === 0 || noFit);
 
     set({
       grid: gridAfterClear,
@@ -197,37 +232,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   continueAfterGameOver: () => {
     const state = get();
-    const pieces = generatePieces(state.gridSize);
+    const pieces = makeNewPieces();
 
     set({
       currentPieces: pieces,
       selectedPieceIndex: null,
       isGameOver: false,
-      // Give a few extra moves when continuing via ad
       movesLeft: state.movesLeft !== null ? 5 : null,
     });
   },
 }));
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Reconstruct a `(BlockColor | null)[][]` grid from persisted `LevelData`.
- */
-const buildGridFromLevelData = (
-  levelData: LevelData,
-  gridSize: GridSize,
-): (BlockColor | null)[][] => {
-  const { BLOCK_COLORS } = require('@blockjam/shared');
-  const grid = createEmptyGrid(gridSize);
-
-  for (const cell of levelData.grid.cells) {
-    if (cell.r >= 0 && cell.r < gridSize && cell.c >= 0 && cell.c < gridSize) {
-      grid[cell.r][cell.c] = (BLOCK_COLORS[cell.color] as BlockColor) ?? null;
-    }
-  }
-
-  return grid;
-};

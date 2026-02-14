@@ -414,7 +414,8 @@ export default function HomeScreen(): React.JSX.Element {
 
   const handlePressLevel = useCallback(
     (level: LevelSummary) => {
-      navigation.navigate('game/[levelId]', { levelId: level.id });
+      // Navigate via parent stack navigator (tabs are nested inside the root stack)
+      navigation.getParent()?.navigate('game/[levelId]', { levelId: level.id });
     },
     [navigation],
   );

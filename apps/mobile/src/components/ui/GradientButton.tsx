@@ -8,9 +8,9 @@ import {
 import { colors } from '@/theme/colors';
 
 interface GradientButtonProps {
-  title: string;
+  title?: string;
+  label?: string;
   onPress: () => void;
-  /** Reserved for future LinearGradient integration. Currently unused. */
   gradient?: string[];
   disabled?: boolean;
   style?: ViewStyle;
@@ -18,10 +18,12 @@ interface GradientButtonProps {
 
 export const GradientButton: React.FC<GradientButtonProps> = ({
   title,
+  label,
   onPress,
   disabled = false,
   style,
 }) => {
+  const displayText = title ?? label ?? '';
   return (
     <Pressable
       onPress={onPress}
@@ -33,7 +35,7 @@ export const GradientButton: React.FC<GradientButtonProps> = ({
         style,
       ]}
     >
-      <Text style={styles.text}>{title}</Text>
+      <Text style={styles.text}>{displayText}</Text>
     </Pressable>
   );
 };

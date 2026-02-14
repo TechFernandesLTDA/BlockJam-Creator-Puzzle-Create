@@ -28,7 +28,7 @@ export interface LevelMeta {
   targetLines: number;
   targetMoves: number;
   targetScore: number;
-  difficulty: 'easy' | 'standard' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
   description?: string;
   tags?: string[];
 }

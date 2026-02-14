@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { levels } from '../db/schema.js';
 import { calculateFeedScore } from '../services/feedAlgorithm.js';
@@ -45,7 +45,7 @@ export const rankingWorker = new Worker(
         createdAt: levels.createdAt,
       })
       .from(levels)
-      .where(and(eq(levels.isActive, true)));
+      .where(eq(levels.isActive, true));
 
     let updatedCount = 0;
 

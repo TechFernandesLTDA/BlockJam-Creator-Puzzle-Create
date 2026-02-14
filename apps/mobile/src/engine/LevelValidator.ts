@@ -276,7 +276,7 @@ function validateMeta(meta: LevelMeta): ValidationError[] {
   }
 
   // Difficulty
-  const validDifficulties: string[] = ['easy', 'standard', 'hard'];
+  const validDifficulties: string[] = ['easy', 'medium', 'hard', 'expert'];
   if (!validDifficulties.includes(meta.difficulty)) {
     errors.push({
       code: 'INVALID_DIFFICULTY',

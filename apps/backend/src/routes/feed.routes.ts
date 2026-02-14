@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, desc, lt, sql } from 'drizzle-orm';
+import { and, eq, desc, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { levels, users, likes } from '../db/schema.js';
 import { optionalAuth } from '../middleware/auth.js';

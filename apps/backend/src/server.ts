@@ -1,12 +1,22 @@
 import { buildApp } from './app.js';
 import { logger } from './utils/logger.js';
 import { closeDb } from './db/client.js';
+import { connectRedis, disconnectRedis } from './utils/redis.js';
+import { scheduleRankingUpdates } from './jobs/rankingUpdater.js';
+import { scheduleRewardDistribution } from './jobs/rewardDistributor.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 const HOST = process.env.HOST ?? '0.0.0.0';
 
 async function start(): Promise<void> {
   const app = await buildApp();
+
+  // Connect Redis (non-fatal if unavailable)
+  await connectRedis();
+
+  // Schedule background jobs
+  await scheduleRankingUpdates();
+  await scheduleRewardDistribution();
 
   try {
     await app.listen({ port: PORT, host: HOST });
@@ -24,6 +34,9 @@ async function start(): Promise<void> {
     try {
       await app.close();
       logger.info('Fastify server closed');
+
+      await disconnectRedis();
+      logger.info('Redis disconnected');
 
       await closeDb();
       logger.info('Database connection closed');

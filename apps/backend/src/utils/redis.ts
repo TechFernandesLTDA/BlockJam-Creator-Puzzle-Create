@@ -37,12 +37,4 @@ export async function disconnectRedis(): Promise<void> {
   }
 }
 
-process.on('SIGINT', () => {
-  void disconnectRedis();
-});
-
-process.on('SIGTERM', () => {
-  void disconnectRedis();
-});
-
 export default redis;

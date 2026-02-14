@@ -47,12 +47,14 @@ export function useAdFrequency(): UseAdFrequencyResult {
   const incrementPlayed = useAdsStore((state) => state.incrementPlayed);
   const markAdShownStore = useAdsStore((state) => state.markAdShown);
   const adsRemoved = useAdsStore((state) => state.adsRemoved);
+  const levelsPlayedSinceAd = useAdsStore(
+    (state) => state.levelsPlayedSinceAd,
+  );
 
   const shouldShowAd = useMemo(
     () => shouldShowInterstitial(),
-    // Re-evaluate every time the store selector reference changes, which
-    // happens when levelsPlayedSinceAd or adsRemoved changes.
-    [shouldShowInterstitial],
+    // Re-evaluate whenever the underlying data changes.
+    [shouldShowInterstitial, levelsPlayedSinceAd, adsRemoved],
   );
 
   const markPlayed = useCallback(() => {

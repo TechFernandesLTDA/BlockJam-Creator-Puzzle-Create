@@ -8,16 +8,12 @@
  *      1 line  = 1x (no combo)
  *      2 lines = 2x
  *      3 lines = 3x
- *      4 lines = 4x
- *      5+ lines = 5x (capped)
+ *      4 lines = 5x (accelerating)
+ *      5+ lines = 8x (capped)
  *  - Star rating for UGC levels is based on score vs target
  */
 
-/** Maximum combo multiplier */
-const MAX_COMBO = 5;
-
-/** Points awarded per cleared cell before multiplier */
-const POINTS_PER_CELL = 10;
+import { COMBO_MULTIPLIERS, MAX_COMBO, POINTS_PER_CELL } from '@blockjam/shared';
 
 /** Star thresholds as fractions of targetScore */
 const STAR_THRESHOLDS = {
@@ -54,8 +50,8 @@ export function calculateScore(
  */
 export function calculateCombo(linesCleared: number): number {
   if (linesCleared <= 0) return 1;
-  if (linesCleared >= MAX_COMBO) return MAX_COMBO;
-  return linesCleared;
+  const clamped = Math.min(linesCleared, MAX_COMBO);
+  return COMBO_MULTIPLIERS[clamped] ?? clamped;
 }
 
 /**

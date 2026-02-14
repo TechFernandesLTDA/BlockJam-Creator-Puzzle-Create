@@ -62,22 +62,30 @@ export async function verifyAuth(
       .limit(1);
 
     if (user.length === 0) {
-      // Try matching by user id as fallback
-      const userById = await db
-        .select({
-          id: users.id,
-          firebaseUid: users.firebaseUid,
-          displayName: users.displayName,
-        })
-        .from(users)
-        .where(eq(users.id, token))
-        .limit(1);
+      // Try matching by user id as fallback.
+      // Wrap in try/catch because token may not be a valid UUID,
+      // which would cause a PostgreSQL cast error.
+      try {
+        const userById = await db
+          .select({
+            id: users.id,
+            firebaseUid: users.firebaseUid,
+            displayName: users.displayName,
+          })
+          .from(users)
+          .where(eq(users.id, token))
+          .limit(1);
 
-      if (userById.length === 0) {
+        if (userById.length === 0) {
+          throw new UnauthorizedError('Invalid authentication token');
+        }
+
+        request.user = userById[0];
+      } catch (innerErr) {
+        if (innerErr instanceof UnauthorizedError) throw innerErr;
+        // Token is not a valid UUID — treat as invalid
         throw new UnauthorizedError('Invalid authentication token');
       }
-
-      request.user = userById[0];
     } else {
       request.user = user[0];
     }
@@ -124,18 +132,23 @@ export async function optionalAuth(
     if (user.length > 0) {
       request.user = user[0];
     } else {
-      const userById = await db
-        .select({
-          id: users.id,
-          firebaseUid: users.firebaseUid,
-          displayName: users.displayName,
-        })
-        .from(users)
-        .where(eq(users.id, token))
-        .limit(1);
+      // Wrap in try/catch because token may not be a valid UUID
+      try {
+        const userById = await db
+          .select({
+            id: users.id,
+            firebaseUid: users.firebaseUid,
+            displayName: users.displayName,
+          })
+          .from(users)
+          .where(eq(users.id, token))
+          .limit(1);
 
-      if (userById.length > 0) {
-        request.user = userById[0];
+        if (userById.length > 0) {
+          request.user = userById[0];
+        }
+      } catch {
+        // Token is not a valid UUID — ignore for optional auth
       }
     }
   } catch (err) {

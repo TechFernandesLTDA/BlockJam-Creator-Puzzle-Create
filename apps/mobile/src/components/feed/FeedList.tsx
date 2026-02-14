@@ -13,28 +13,45 @@ import { FeedCard } from './FeedCard';
 
 interface FeedListProps {
   levels: LevelSummary[];
-  onLoadMore: () => void;
+  onLoadMore?: () => void;
+  onEndReached?: () => void;
   isLoading: boolean;
-  onLevelPress: (id: string) => void;
+  onLevelPress?: (id: string) => void;
+  onPressLevel?: (level: LevelSummary) => void;
   onLike: (id: string) => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export const FeedList: React.FC<FeedListProps> = ({
   levels,
   onLoadMore,
+  onEndReached,
   isLoading,
   onLevelPress,
+  onPressLevel,
   onLike,
+  refreshing,
+  onRefresh,
 }) => {
+  const handleLoadMore = onEndReached ?? onLoadMore ?? (() => {});
+  const handleRefresh = onRefresh ?? onLoadMore ?? (() => {});
+  const handleLevelPress = (item: LevelSummary) => {
+    if (onPressLevel) {
+      onPressLevel(item);
+    } else if (onLevelPress) {
+      onLevelPress(item.id);
+    }
+  };
   const renderItem = useCallback(
     ({ item }: { item: LevelSummary }) => (
       <FeedCard
         level={item}
-        onPress={() => onLevelPress(item.id)}
+        onPress={() => handleLevelPress(item)}
         onLike={() => onLike(item.id)}
       />
     ),
-    [onLevelPress, onLike],
+    [onLike, onLevelPress, onPressLevel],
   );
 
   const keyExtractor = useCallback((item: LevelSummary) => item.id, []);
@@ -61,11 +78,11 @@ export const FeedList: React.FC<FeedListProps> = ({
     );
   }, [isLoading]);
 
-  const handleEndReached = useCallback(() => {
+  const handleEndReachedCb = useCallback(() => {
     if (!isLoading) {
-      onLoadMore();
+      handleLoadMore();
     }
-  }, [isLoading, onLoadMore]);
+  }, [isLoading, handleLoadMore]);
 
   return (
     <FlatList
@@ -74,14 +91,14 @@ export const FeedList: React.FC<FeedListProps> = ({
       keyExtractor={keyExtractor}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
-      onEndReached={handleEndReached}
+      onEndReached={handleEndReachedCb}
       onEndReachedThreshold={0.5}
       ListFooterComponent={renderFooter}
       ListEmptyComponent={renderEmpty}
       refreshControl={
         <RefreshControl
-          refreshing={false}
-          onRefresh={onLoadMore}
+          refreshing={refreshing ?? false}
+          onRefresh={handleRefresh}
           tintColor={colors.ui.accent}
           colors={[colors.ui.accent]}
           progressBackgroundColor={colors.bg.surface}

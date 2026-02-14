@@ -10,7 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'react-native-linear-gradient';
+// LinearGradient removed — using solid accent bg fallback.
+// Install react-native-linear-gradient and re-enable for gradient buttons.
 
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
@@ -102,14 +103,9 @@ function GradientButton({
       disabled={disabled}
       style={[styles.gradientButtonOuter, disabled && styles.gradientButtonDisabled]}
     >
-      <LinearGradient
-        colors={[gradient[0], gradient[1]]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.gradientButtonInner}
-      >
+      <View style={[styles.gradientButtonInner, { backgroundColor: colors.ui.accent }]}>
         <Text style={styles.gradientButtonText}>{label}</Text>
-      </LinearGradient>
+      </View>
     </TouchableOpacity>
   );
 }

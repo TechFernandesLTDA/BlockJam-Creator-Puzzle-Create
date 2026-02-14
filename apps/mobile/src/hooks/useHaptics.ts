@@ -43,11 +43,7 @@ const ERROR_PATTERN = [0, 40, 80, 40, 80, 40]; // three pulses
 
 function vibrate(durationOrPattern: number | number[]): void {
   try {
-    if (Array.isArray(durationOrPattern)) {
-      Vibration.vibrate(durationOrPattern);
-    } else {
-      Vibration.vibrate(durationOrPattern);
-    }
+    Vibration.vibrate(durationOrPattern);
   } catch {
     // Vibration may not be available on all devices / simulators.
   }

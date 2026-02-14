@@ -1,7 +1,8 @@
 import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { BlurView } from '@react-native-community/blur';
+// BlurView removed — using semi-transparent fallback on all platforms.
+// Install @react-native-community/blur and re-enable for native iOS blur.
 
 import { colors } from '@/theme/colors';
 import type { TabParamList } from '@/types/navigation';
@@ -68,18 +69,8 @@ function TabIcon({
  * to a semi-transparent navy background that approximates the effect.
  */
 function TabBarBackground(): React.JSX.Element {
-  if (Platform.OS === 'ios') {
-    return (
-      <BlurView
-        blurType="dark"
-        blurAmount={24}
-        reducedTransparencyFallbackColor={colors.bg.secondary}
-        style={StyleSheet.absoluteFill}
-      />
-    );
-  }
-
-  // Android fallback -- solid colour with opacity already baked in.
+  // Semi-transparent background on all platforms.
+  // Replace with BlurView on iOS when @react-native-community/blur is installed.
   return <View style={[StyleSheet.absoluteFill, styles.androidBlurFallback]} />;
 }
 

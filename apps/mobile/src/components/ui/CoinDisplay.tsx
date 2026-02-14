@@ -3,7 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 
 interface CoinDisplayProps {
-  amount: number;
+  amount?: number;
+  coins?: number;
 }
 
 /**
@@ -20,11 +21,12 @@ function formatAmount(n: number): string {
   return n.toLocaleString('en-US');
 }
 
-export const CoinDisplay: React.FC<CoinDisplayProps> = ({ amount }) => {
+export const CoinDisplay: React.FC<CoinDisplayProps> = ({ amount, coins }) => {
+  const value = amount ?? coins ?? 0;
   return (
     <View style={styles.container}>
       <Text style={styles.icon}>{'\uD83E\uDE99'}</Text>
-      <Text style={styles.amount}>{formatAmount(amount)}</Text>
+      <Text style={styles.amount}>{formatAmount(value)}</Text>
     </View>
   );
 };
