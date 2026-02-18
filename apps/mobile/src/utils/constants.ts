@@ -6,10 +6,7 @@ import { Platform } from 'react-native';
  * __DEV__ is a React Native global that is true during development.
  */
 export const API_URL: string = __DEV__
-  ? Platform.select({
-      android: 'http://10.0.2.2:3000/api',
-      default: 'http://localhost:3000/api',
-    }) ?? 'http://localhost:3000/api'
+  ? 'http://localhost:3000/api'
   : 'https://api.blockjam.app/api';
 
 /**
@@ -93,6 +90,8 @@ export const STORAGE_KEYS = {
   USER_PROFILE: 'user.profile',
   ONBOARDING_COMPLETE: 'onboarding.complete',
   THEME_PREFERENCE: 'theme.preference',
+  TUTORIAL_COMPLETED: 'tutorial.completed',
+  TIPS_SEEN: 'tips.seen',
 } as const;
 
 /**

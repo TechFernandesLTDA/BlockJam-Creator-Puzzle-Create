@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -16,8 +16,12 @@ import BlockPiece from '@/components/game/BlockPiece';
 import ScoreBar from '@/components/game/ScoreBar';
 import GameOverModal from '@/components/game/GameOverModal';
 import ComboEffect from '@/components/game/ComboEffect';
+import TutorialOverlay from '@/components/game/TutorialOverlay';
+import TipBubble from '@/components/game/TipBubble';
+import HintButton from '@/components/game/HintButton';
 
 import { useGameStore } from '@/stores/useGameStore';
+import { useTutorialStore } from '@/stores/useTutorialStore';
 import { canPlacePiece } from '@/engine/GridLogic';
 
 // ---------------------------------------------------------------------------
@@ -63,13 +67,28 @@ export default function GameLevelScreen(): React.JSX.Element {
   const resetGame = useGameStore((s) => s.resetGame);
   const continueAfterGameOver = useGameStore((s) => s.continueAfterGameOver);
 
+  // ---- Tutorial store selectors -------------------------------------------
+  const tutorialStep = useTutorialStore((s) => s.tutorialStep);
+  const activeTip = useTutorialStore((s) => s.activeTip);
+  const hintCells = useTutorialStore((s) => s.hintCells);
+  const startTutorial = useTutorialStore((s) => s.startTutorial);
+  const nextStep = useTutorialStore((s) => s.nextStep);
+  const showTip = useTutorialStore((s) => s.showTip);
+  const dismissTip = useTutorialStore((s) => s.dismissTip);
+
   // ---- Local UI state -----------------------------------------------------
   const [showCombo, setShowCombo] = useState(false);
   const [displayedCombo, setDisplayedCombo] = useState(0);
 
+  // Track previous values for tip triggers
+  const prevSelectedRef = useRef<number | null>(null);
+  const prevLinesClearedRef = useRef(0);
+  const prevComboRef = useRef(0);
+
   // ---- Initialise game on mount -------------------------------------------
   useEffect(() => {
     initGame(8);
+    startTutorial();
     return () => {
       resetGame();
     };
@@ -90,8 +109,108 @@ export default function GameLevelScreen(): React.JSX.Element {
     }
   }, [combo]);
 
+  // ---- Tutorial: advance step on piece selection (step 1 → 2) -------------
+  useEffect(() => {
+    if (
+      tutorialStep === 1 &&
+      selectedPieceIndex !== null &&
+      prevSelectedRef.current === null
+    ) {
+      nextStep();
+    }
+    prevSelectedRef.current = selectedPieceIndex;
+  }, [selectedPieceIndex, tutorialStep, nextStep]);
+
+  // ---- Tutorial: advance step on piece placement (step 2 → 3) -------------
+  useEffect(() => {
+    // When the grid changes after step 2 (piece was placed), selectedPieceIndex
+    // goes back to null. We detect placement by selectedPieceIndex going
+    // from non-null → null while tutorialStep is 2.
+    if (
+      tutorialStep === 2 &&
+      selectedPieceIndex === null &&
+      prevSelectedRef.current !== null
+    ) {
+      nextStep();
+    }
+  }, [selectedPieceIndex, tutorialStep, nextStep]);
+
+  // ---- Contextual tip: first_select --------------------------------------
+  useEffect(() => {
+    if (
+      tutorialStep === null &&
+      selectedPieceIndex !== null &&
+      prevSelectedRef.current === null
+    ) {
+      showTip(
+        'first_select',
+        'Você selecionou uma peça! Toque no tabuleiro para colocá-la.',
+      );
+    }
+    // prevSelectedRef is updated in the tutorial effect above
+  }, [selectedPieceIndex, tutorialStep, showTip]);
+
+  // ---- Contextual tip: first_clear ---------------------------------------
+  useEffect(() => {
+    if (
+      tutorialStep === null &&
+      linesCleared > prevLinesClearedRef.current
+    ) {
+      showTip(
+        'first_clear',
+        'Linha limpa! Continue limpando para ganhar mais pontos.',
+      );
+    }
+    prevLinesClearedRef.current = linesCleared;
+  }, [linesCleared, tutorialStep, showTip]);
+
+  // ---- Contextual tip: combo_explain -------------------------------------
+  useEffect(() => {
+    if (tutorialStep === null && combo >= 3 && prevComboRef.current < 3) {
+      showTip(
+        'combo_explain',
+        'Combo x3! Limpe linhas consecutivas para multiplicar sua pontuação.',
+      );
+    }
+    prevComboRef.current = combo;
+  }, [combo, tutorialStep, showTip]);
+
+  // ---- Contextual tip: near_gameover -------------------------------------
+  useEffect(() => {
+    if (tutorialStep !== null) return;
+    if (selectedPieceIndex === null) return;
+
+    // Count valid positions for all unplaced pieces
+    const unplaced = currentPieces.filter((p) => !p.isPlaced);
+    let validPositions = 0;
+    for (const piece of unplaced) {
+      const shapeRows = piece.shape.length;
+      const shapeCols = piece.shape[0]?.length ?? 0;
+      for (let r = 0; r <= gridSize - shapeRows; r++) {
+        for (let c = 0; c <= gridSize - shapeCols; c++) {
+          if (canPlacePiece(grid, piece.shape, r, c)) {
+            validPositions++;
+            if (validPositions >= 3) break;
+          }
+        }
+        if (validPositions >= 3) break;
+      }
+      if (validPositions >= 3) break;
+    }
+
+    if (validPositions < 3 && validPositions > 0) {
+      showTip(
+        'near_gameover',
+        'Cuidado! Restam poucos espaços. Pense com cuidado.',
+      );
+    }
+  }, [grid, currentPieces, selectedPieceIndex, gridSize, tutorialStep, showTip]);
+
   // ---- Compute highlight cells for valid placement preview ----------------
   const highlightCells = useMemo(() => {
+    // If hint cells are active, use those instead
+    if (hintCells) return hintCells;
+
     if (selectedPieceIndex === null) return undefined;
 
     const piece = currentPieces[selectedPieceIndex];
@@ -125,7 +244,7 @@ export default function GameLevelScreen(): React.JSX.Element {
       seen.add(key);
       return true;
     });
-  }, [selectedPieceIndex, currentPieces, grid, gridSize]);
+  }, [selectedPieceIndex, currentPieces, grid, gridSize, hintCells]);
 
   // ---- Handlers -----------------------------------------------------------
 
@@ -167,10 +286,12 @@ export default function GameLevelScreen(): React.JSX.Element {
 
   // ---- Render -------------------------------------------------------------
 
+  const isTutorialActive = tutorialStep !== null;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
-        {/* Header bar with back button */}
+        {/* Header bar with back button and hint button */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -182,7 +303,7 @@ export default function GameLevelScreen(): React.JSX.Element {
           <Text style={styles.headerTitle}>
             {levelId === 'endless' ? 'Endless Mode' : `Level ${levelId}`}
           </Text>
-          <View style={styles.headerSpacer} />
+          <HintButton disabled={isTutorialActive} />
         </View>
 
         {/* Score Bar */}
@@ -220,6 +341,16 @@ export default function GameLevelScreen(): React.JSX.Element {
 
         {/* Combo Effect overlay */}
         <ComboEffect combo={displayedCombo} visible={showCombo} />
+
+        {/* Tip Bubble */}
+        <TipBubble
+          message={activeTip?.message ?? ''}
+          visible={activeTip !== null}
+          onDismiss={dismissTip}
+        />
+
+        {/* Tutorial Overlay */}
+        <TutorialOverlay />
 
         {/* Game Over / Level Complete modal */}
         <GameOverModal
@@ -274,9 +405,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.lg,
     color: colors.ui.text,
     textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 40, // same as back button for centering
   },
   boardWrapper: {
     flex: 1,

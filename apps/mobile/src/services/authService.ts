@@ -2,50 +2,7 @@ import type { User } from '@blockjam/shared';
 
 import api from './api';
 import { STORAGE_KEYS } from '../utils/constants';
-
-// ---------------------------------------------------------------------------
-// MMKV wrapper with in-memory fallback
-// ---------------------------------------------------------------------------
-
-/**
- * Lightweight storage abstraction.
- *
- * Attempts to use `react-native-mmkv` when it is installed and available at
- * runtime.  If the native module is missing (e.g. inside a bare Expo Go
- * build or a test runner) every operation silently falls back to a plain
- * in-memory `Map`, so the rest of the app keeps working.
- */
-
-let mmkvInstance: {
-  getString: (key: string) => string | undefined;
-  set: (key: string, value: string) => void;
-  delete: (key: string) => void;
-} | null = null;
-
-const memoryStore = new Map<string, string>();
-
-function getStorage() {
-  if (mmkvInstance) return mmkvInstance;
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { MMKV } = require('react-native-mmkv');
-    mmkvInstance = new MMKV();
-    return mmkvInstance!;
-  } catch {
-    // MMKV is not available – use in-memory fallback.
-    mmkvInstance = {
-      getString: (key: string) => memoryStore.get(key),
-      set: (key: string, value: string) => {
-        memoryStore.set(key, value);
-      },
-      delete: (key: string) => {
-        memoryStore.delete(key);
-      },
-    };
-    return mmkvInstance;
-  }
-}
+import { getStorage } from '../utils/storage';
 
 // ---------------------------------------------------------------------------
 // Token persistence
