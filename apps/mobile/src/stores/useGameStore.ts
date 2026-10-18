@@ -7,16 +7,15 @@ import type {
 } from '@blockjam/shared';
 import {
   createEmptyGrid,
-  generatePieces,
   canPlacePiece,
-  placePieceOnGrid,
-  findAndClearLines,
-  checkGameOver,
+  placePiece as placePieceOnGrid,
+  findCompletedLines,
+  clearLines,
+  canAnyPieceFit,
+  countClearedCells,
 } from '@/engine/GridLogic';
-import {
-  calculatePlacementScore,
-  checkLevelComplete,
-} from '@/engine/GameEngine';
+import { getRandomPieces } from '@/engine/BlockTypes';
+import { calculateScore, calculateCombo } from '@/engine/ScoreCalculator';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,6 +77,45 @@ interface GameStoreActions {
 type GameStore = GameStoreState & GameStoreActions;
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate 3 random pieces and map them to the shared `Piece` interface.
+ */
+function generatePieces(): Piece[] {
+  const raw = getRandomPieces(3);
+  return raw.map((p) => ({
+    id: p.definition.id,
+    shape: p.definition.shape,
+    color: p.color,
+    isPlaced: false,
+  }));
+}
+
+/**
+ * Reconstruct a `(BlockColor | null)[][]` grid from persisted `LevelData`.
+ */
+function buildGridFromLevelData(
+  levelData: LevelData,
+  gridSize: GridSize,
+): (BlockColor | null)[][] {
+  const grid = createEmptyGrid(gridSize);
+
+  for (const cell of levelData.grid.cells) {
+    if (cell.r >= 0 && cell.r < gridSize && cell.c >= 0 && cell.c < gridSize) {
+      // cell.color is a number index; map it to a BlockColor string
+      const BLOCK_COLORS: BlockColor[] = [
+        'red', 'blue', 'green', 'yellow', 'purple', 'orange', 'cyan', 'pink',
+      ];
+      grid[cell.r]![cell.c] = BLOCK_COLORS[cell.color] ?? null;
+    }
+  }
+
+  return grid;
+}
+
+// ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
 
@@ -111,7 +149,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ? buildGridFromLevelData(levelData, gridSize)
       : createEmptyGrid(gridSize);
 
-    const pieces = generatePieces(gridSize);
+    const pieces = generatePieces();
 
     set({
       grid,
@@ -134,18 +172,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const piece = state.currentPieces[pieceIndex];
     if (!piece || piece.isPlaced) return;
 
-    if (!canPlacePiece(state.grid, piece, row, col)) return;
+    if (!canPlacePiece(state.grid, piece.shape, row, col)) return;
 
     // 1. Place piece on grid
-    const gridAfterPlace = placePieceOnGrid(state.grid, piece, row, col);
+    const gridAfterPlace = placePieceOnGrid(
+      state.grid,
+      piece.shape,
+      row,
+      col,
+      piece.color,
+    );
 
-    // 2. Clear completed lines
-    const { grid: gridAfterClear, linesCleared: newLines } =
-      findAndClearLines(gridAfterPlace, state.gridSize);
+    // 2. Find and clear completed lines
+    const completed = findCompletedLines(gridAfterPlace);
+    const newLines = completed.rows.length + completed.cols.length;
+    const gridAfterClear =
+      newLines > 0
+        ? clearLines(gridAfterPlace, completed.rows, completed.cols)
+        : gridAfterPlace;
 
     // 3. Calculate score
     const combo = newLines > 0 ? state.combo + 1 : 0;
-    const pointsEarned = calculatePlacementScore(piece, newLines, combo);
+    const comboLevel = calculateCombo(newLines);
+    const cellsCleared =
+      newLines > 0
+        ? countClearedCells(gridAfterPlace, completed.rows, completed.cols)
+        : 0;
+    const pointsEarned = cellsCleared > 0 ? calculateScore(cellsCleared, comboLevel) : 0;
     const totalLinesCleared = state.linesCleared + newLines;
 
     // 4. Mark piece as placed
@@ -161,18 +214,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // 6. Refill pieces if all have been placed
     const allPlaced = updatedPieces.every((p) => p.isPlaced);
-    const nextPieces = allPlaced
-      ? generatePieces(state.gridSize)
-      : updatedPieces;
+    const nextPieces = allPlaced ? generatePieces() : updatedPieces;
 
     // 7. Check win / lose conditions
-    const isLevelComplete = checkLevelComplete(
-      totalLinesCleared,
-      state.targetLines,
-    );
+    const isLevelComplete =
+      state.targetLines !== null && totalLinesCleared >= state.targetLines;
+
+    const unplacedPieces = nextPieces.filter((p) => !p.isPlaced);
     const isGameOver =
       !isLevelComplete &&
-      (movesLeft === 0 || checkGameOver(gridAfterClear, nextPieces));
+      (movesLeft === 0 ||
+        (unplacedPieces.length > 0 &&
+          !canAnyPieceFit(
+            gridAfterClear,
+            unplacedPieces.map((p) => ({ shape: p.shape })),
+          )));
 
     set({
       grid: gridAfterClear,
@@ -197,7 +253,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   continueAfterGameOver: () => {
     const state = get();
-    const pieces = generatePieces(state.gridSize);
+    const pieces = generatePieces();
 
     set({
       currentPieces: pieces,
@@ -208,26 +264,3 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
 }));
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Reconstruct a `(BlockColor | null)[][]` grid from persisted `LevelData`.
- */
-const buildGridFromLevelData = (
-  levelData: LevelData,
-  gridSize: GridSize,
-): (BlockColor | null)[][] => {
-  const { BLOCK_COLORS } = require('@blockjam/shared');
-  const grid = createEmptyGrid(gridSize);
-
-  for (const cell of levelData.grid.cells) {
-    if (cell.r >= 0 && cell.r < gridSize && cell.c >= 0 && cell.c < gridSize) {
-      grid[cell.r][cell.c] = (BLOCK_COLORS[cell.color] as BlockColor) ?? null;
-    }
-  }
-
-  return grid;
-};

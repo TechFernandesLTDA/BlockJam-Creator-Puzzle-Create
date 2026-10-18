@@ -123,13 +123,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     switch (selectedTool) {
       case 'paint':
-        next[row][col] = selectedColor;
+        next[row]![col] = selectedColor;
         break;
       case 'erase':
-        next[row][col] = null;
+        next[row]![col] = null;
         break;
       case 'fill':
-        next[row][col] = selectedColor;
+        next[row]![col] = selectedColor;
         break;
     }
 
@@ -141,7 +141,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) return;
 
     const next = cloneGrid(grid);
-    next[row][col] = null;
+    if (!next[row]) return;
+    next[row]![col] = null;
     set({ grid: next });
   },
 

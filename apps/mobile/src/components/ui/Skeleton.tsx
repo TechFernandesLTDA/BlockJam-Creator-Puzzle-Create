@@ -46,7 +46,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
     outputRange: [BASE_COLOR, SHIMMER_COLOR],
   });
 
-  const animatedStyle: Animated.WithAnimatedObject<ViewStyle> = {
+  const animatedStyle: any = {
     width,
     height,
     borderRadius,

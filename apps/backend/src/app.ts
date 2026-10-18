@@ -56,7 +56,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // --- Global error handler ---
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error: any, _request, reply) => {
     logger.error({ err: error }, 'Unhandled error');
 
     if (error instanceof AppError) {

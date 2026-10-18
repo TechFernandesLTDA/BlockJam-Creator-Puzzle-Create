@@ -49,6 +49,7 @@ const BlockPiece: React.FC<BlockPieceProps> = ({
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   // Animate scale and glow when selection state changes.
+  // Both animations must use the same driver since they target the same View.
   useEffect(() => {
     if (isSelected) {
       Animated.parallel([
@@ -56,7 +57,7 @@ const BlockPiece: React.FC<BlockPieceProps> = ({
           toValue: 1.12,
           friction: 5,
           tension: 120,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(glowAnim, {
           toValue: 1,
@@ -70,7 +71,7 @@ const BlockPiece: React.FC<BlockPieceProps> = ({
           toValue: 1,
           friction: 5,
           tension: 120,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(glowAnim, {
           toValue: 0,

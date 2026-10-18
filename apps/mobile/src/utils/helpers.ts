@@ -45,7 +45,7 @@ export function generateId(): string {
     ) {
       const buf = new Uint8Array(1);
       globalThis.crypto.getRandomValues(buf);
-      return buf[0];
+      return buf[0] ?? 0;
     }
     return Math.floor(Math.random() * 256);
   };
@@ -55,8 +55,8 @@ export function generateId(): string {
   const bytes = Array.from({ length: 16 }, getRandomByte);
 
   // Set version (4) and variant (10xx) bits per RFC 4122
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
 
   const h = bytes.map(hex);
 

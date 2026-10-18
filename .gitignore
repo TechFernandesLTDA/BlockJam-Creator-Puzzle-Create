@@ -110,3 +110,7 @@ coverage/
 .cache/
 tmp/
 temp/
+
+# build nativo do Android (CMake)
+apps/mobile/android/app/.cxx/
+.claude/settings.local.json
